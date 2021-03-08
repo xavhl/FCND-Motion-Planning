@@ -2,10 +2,12 @@ import argparse
 import time
 import msgpack
 from enum import Enum, auto
-
+import matplotlib.pyplot as plt
 import numpy as np
+import random
+import networkx as nx
 
-from planning_utils import a_star, heuristic, create_grid, dfs, iterative_astar, ucs, heuristic2, a_star_traverse
+from planning_utils import a_star, bfs, heuristic, create_grid, create_grid_and_edges
 from udacidrone import Drone
 from udacidrone.connection import MavlinkConnection
 from udacidrone.messaging import MsgID
@@ -124,46 +126,52 @@ class MotionPlanning(Drone):
         # Read in obstacle map
         data = np.loadtxt('colliders.csv', delimiter=',', dtype='Float64', skiprows=2)
         
-        # Define a grid for a particular altitude and safety margin around obstacles
-        grid, north_offset, east_offset = create_grid(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
+        # Define a flying altitude (feel free to change this)
+        drone_altitude = 5
+        safety_distance = 3
+        grid, north_offset, east_offset, edges = create_grid_and_edges(data, drone_altitude, safety_distance)
+        print('Found %5d edges' % len(edges))
+        plt.imshow(grid, origin='lower', cmap='Greys')
+        # Stepping through each edge
+        for e in edges:
+            p1 = e[0]
+            p2 = e[1]
+            plt.plot([p1[1], p2[1]], [p1[0], p2[0]], 'b-')
+        
+        plt.xlabel('EAST')
+        plt.ylabel('NORTH')
+        plt.show()
+        
+        # Create networkx graph
+        graph = nx.Graph()
+        for e in edges:
+            graph.add_edge(*e)
+        
         print("North offset = {0}, east offset = {1}".format(north_offset, east_offset))
+
         # Define starting point on the grid (this is just grid center)
-        grid_start = (-north_offset, -east_offset)
+        grid_start = (640.7610999999999, 398.7684653999999) # random point generated from: grid_start = edges[random.randint(0, len(edges))][0]
         
         # Set goal as some arbitrary position on the grid
-        grid_goal = (-north_offset - 4, -east_offset - 4)
+        grid_goal = (250.761145, 190.76849833333335)  # random point generated from: grid_goal = edges[random.randint(0, len(edges))][0]
 
-        # Run algorithm to find a path from start to goal
+        # Run bfs to find a path from start to goal
         print('Local Start and Goal: ', grid_start, grid_goal)
+        path, _ = bfs(graph, _, grid_start, grid_goal)
+        # print(path)
 
+        # Plot resulted path
+        plt.imshow(grid, origin='lower', cmap='Greys')
+        for e in edges:
+            p1 = e[0]
+            p2 = e[1]
+            plt.plot([p1[1], p2[1]], [p1[0], p2[0]], 'b-')
+        for p in path:
+            plt.plot(p[1], p[0], 'ro-', markersize=2)
 
-
-        # algorithms
-
-        # example: A* search
-        path, _ = a_star(grid, heuristic, grid_start, grid_goal)
-
-        # question 1: depth first search
-        # path, _ = dfs(grid, heuristic, grid_start, grid_goal)
-
-        # question 2: iterative deepening A* search
-        # path, _ = iterative_astar(grid, heuristic, grid_start, grid_goal)
-
-        # question 3: uniform cost search
-        # path, _ = ucs(grid, heuristic, grid_start, grid_goal)
-
-        # question 4: different heuristic (Manhattan Distance)
-        # path, _ = a_star(grid, heuristic2, grid_start, grid_goal)
-
-        # question 6:  A* search for traversing 3 fixed points 
-        # p1 = (-north_offset - 3, -east_offset + 2)
-        # p2 = (-north_offset + 5, -east_offset - 7)
-        # p3 = (-north_offset - 6, -east_offset - 9)
-        # path, _ = a_star_traverse(grid, heuristic2, grid_start, grid_goal, [p1, p2, p3]) 
-
-
-
-        # print('Found', path)
+        plt.xlabel('EAST')
+        plt.ylabel('NORTH')
+        plt.show()
 
         # Convert path to waypoints
         waypoints = [[p[0] + north_offset, p[1] + east_offset, TARGET_ALTITUDE, 0] for p in path]
